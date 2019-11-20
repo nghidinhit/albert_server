@@ -1,5 +1,10 @@
 # Usage
-mkdir logs
-mkdir dataset/corpus
-Put your dataset in: dataset/corpus
+In the root directory, run the following command:
+
+- mkdir logs
+
+- mkdir dataset/corpus
+
+Put your pregenerated dataset in: dataset/corpus
+
 Run model: ```bash ./run.sh```
