@@ -47,11 +47,11 @@ python run_pretraining.py \
     --num_save_steps 10000 \
     --local_rank -1 \
     --gradient_accumulation_steps 1 \
-    --train_batch_size 256 \
+    --train_batch_size 1 \
     --loss_scale 0 \
     --warmup_proportion 0.1 \
     --adam_epsilon 1e-8 \
     --max_grad_norm 10.0 \
     --learning_rate 0.00176 \
     --seed 42 \
-    --checkpoint_dir outputs/checkpoints/lm-checkpoint/
+    --checkpoint_dir checkpoints/lm-checkpoint/

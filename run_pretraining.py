@@ -104,17 +104,21 @@ class PregeneratedDataset(Dataset):
             lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
             is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
         logger.info(f"Loading training examples for {str(data_file)}")
-        # with data_file.open() as f:
-        #     for i, line in enumerate(f):
-        #         print('\ri = %d' % i, end='\r')
-        #         line = line.strip()
-        #         example = json.loads(line)
-        #         features = convert_example_to_features(example, tokenizer, seq_len)
-        #         input_ids[i] = features.input_ids
-        #         segment_ids[i] = features.segment_ids
-        #         input_masks[i] = features.input_mask
-        #         lm_label_ids[i] = features.lm_label_ids
-        #         is_nexts[i] = features.is_next
+        count_sample = 0
+        num_samples = 1000
+        with data_file.open() as f:
+            for i, line in enumerate(f):
+                print('\ri = %d' % i, end='\r')
+                count_sample += 1
+                line = line.strip()
+                example = json.loads(line)
+                features = convert_example_to_features(example, tokenizer, seq_len)
+                input_ids[i] = features.input_ids
+                segment_ids[i] = features.segment_ids
+                input_masks[i] = features.input_mask
+                lm_label_ids[i] = features.lm_label_ids
+                is_nexts[i] = features.is_next
+                if count_sample == num_samples: break
         # assert i == num_samples - 1  # Assert that the sample count metric was true
 
         # np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
@@ -125,16 +129,16 @@ class PregeneratedDataset(Dataset):
         # np.save(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}), segment_ids)
         # np.save(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}), is_nexts)
 
-        # num_samples = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         
         logger.info("Loading complete!")
-        self.num_samples = 15000000
+        self.num_samples = num_samples
         self.seq_len = seq_len
         self.input_ids = input_ids[:self.num_samples]
         self.input_masks = input_masks[:self.num_samples]
@@ -203,10 +207,10 @@ def main():
     parser.add_argument('--fp16', action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
     parser.add_argument('--num_samples', type=int, default=15000000, help='num sample for training')
-    parser.add_argument('--checkpoint_dir', type=str, default='output/checkpoints/lm-checkpoint')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/lm-checkpoint')
     args = parser.parse_args()
 
-    pregenerated_data = config['data_dir'] / "corpus/train/shard"
+    pregenerated_data = config['data_dir'] / "corpus"
     assert pregenerated_data.is_dir(), \
         "--pregenerated_data should point to the folder of files made by prepare_lm_data_mask.py!"
 
@@ -214,12 +218,12 @@ def main():
     for i in range(args.file_num):
         data_file = pregenerated_data / f"{args.data_name}_file_{i}.json"
         metrics_file = pregenerated_data / f"{args.data_name}_file_{i}_metrics.json"
-        print(data_file)
-        print(metrics_file)
+        # print(data_file)
+        # print(metrics_file)
         if data_file.is_file() and metrics_file.is_file():
             metrics = json.loads(metrics_file.read_text())
-            # samples_per_epoch += metrics['num_training_examples']
-            samples_per_epoch += int(args.num_samples)
+            samples_per_epoch += metrics['num_training_examples']
+            # samples_per_epoch += int(args.num_samples)
         else:
             if i == 0:
                 exit("No training data was found!")
@@ -246,8 +250,16 @@ def main():
             f"Invalid gradient_accumulation_steps parameter: {args.gradient_accumulation_steps}, should be >= 1")
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
     seed_everything(args.seed)
-    # tokenizer = BertTokenizer(vocab_file=config['albert_vocab_path'])
-    tokenizer = BertTokenizer.from_pretrained(args.checkpoint_dir)
+    try:
+        tokenizer = BertTokenizer.from_pretrained(args.checkpoint_dir)
+        if tokenizer is not None:
+            logger.info('Init tokenizer from pretrained model')
+        else:
+            tokenizer = BertTokenizer(vocab_file=config['albert_vocab_path'])
+            logger.info('Init tokenizer from vocab')
+    except:
+        tokenizer = BertTokenizer(vocab_file=config['albert_vocab_path'])
+        logger.info('Init tokenizer from vocab')
     total_train_examples = samples_per_epoch * args.epochs
 
     num_train_optimization_steps = int(
@@ -256,9 +268,13 @@ def main():
         num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
     args.warmup_steps = int(num_train_optimization_steps * args.warmup_proportion)
 
-    bert_config = BertConfig.from_pretrained(str(config['albert_config_path']),share_type=args.share_type)
-    model = BertForPreTraining(config=bert_config)
-    model = BertForPreTraining.from_pretrained(args.checkpoint_dir)
+    bert_config = BertConfig.from_pretrained(str(config['albert_config_path']), share_type=args.share_type)
+    try:
+        model = BertForPreTraining.from_pretrained(args.checkpoint_dir)
+        logger.info('Load model from pretrained model')
+    except:
+        model = BertForPreTraining(config=bert_config)
+        logger.info('Init model from scratch')
     # model = BertForMaskedLM.from_pretrained(config['checkpoint_dir'] / 'checkpoint-580000')
     model.to(device)
     # Prepare optimizer
@@ -284,7 +300,7 @@ def main():
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
     if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=[0, 1, 2, 3, 4])
+        model = torch.nn.DataParallel(model, device_ids=[0, 1, 2, 3, 4, 5, 6, 7])
 
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
@@ -310,7 +326,6 @@ def main():
     seed_everything(args.seed)  # Added here for reproducibility
     best_loss = float('inf')
     for epoch in range(args.epochs):
-        # break
         for idx in range(args.file_num):
             epoch_dataset = PregeneratedDataset(file_id=idx, training_path=pregenerated_data, tokenizer=tokenizer,
                                                 reduce_memory=args.reduce_memory, data_name=args.data_name)
