@@ -1,5 +1,6 @@
 # Requirement
 python 3.6
+
 pytorch 1.1.0
 
 pip install -r requirements.txt
