@@ -8,6 +8,10 @@ In the root directory, run the following command:
 
 - mkdir dataset/corpus
 
+- mkdir checkpoints
+
+- mkdir checkpoints/lm-checkpoint
+
 Put your pregenerated dataset in: dataset/corpus
 
 Run model: ```bash ./run.sh```
