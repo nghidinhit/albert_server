@@ -104,12 +104,12 @@ class PregeneratedDataset(Dataset):
             lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
             is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
         logger.info(f"Loading training examples for {str(data_file)}")
-        count_sample = 0
-        num_samples = 1000
+        # count_sample = 0
+        # num_samples = 1000
         with data_file.open() as f:
             for i, line in enumerate(f):
                 print('\ri = %d' % i, end='\r')
-                count_sample += 1
+                # count_sample += 1
                 line = line.strip()
                 example = json.loads(line)
                 features = convert_example_to_features(example, tokenizer, seq_len)
@@ -118,8 +118,8 @@ class PregeneratedDataset(Dataset):
                 input_masks[i] = features.input_mask
                 lm_label_ids[i] = features.lm_label_ids
                 is_nexts[i] = features.is_next
-                if count_sample == num_samples: break
-        # assert i == num_samples - 1  # Assert that the sample count metric was true
+                # if count_sample == num_samples: break
+        assert i == num_samples - 1  # Assert that the sample count metric was true
 
         # np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
         # np.save(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}), lm_label_ids)
