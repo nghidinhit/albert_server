@@ -106,20 +106,20 @@ class PregeneratedDataset(Dataset):
         logger.info(f"Loading training examples for {str(data_file)}")
         # count_sample = 0
         # num_samples = 1000
-        with data_file.open() as f:
-            for i, line in enumerate(f):
-                print('\ri = %d' % i, end='\r')
-                # count_sample += 1
-                line = line.strip()
-                example = json.loads(line)
-                features = convert_example_to_features(example, tokenizer, seq_len)
-                input_ids[i] = features.input_ids
-                segment_ids[i] = features.segment_ids
-                input_masks[i] = features.input_mask
-                lm_label_ids[i] = features.lm_label_ids
-                is_nexts[i] = features.is_next
-                # if count_sample == num_samples: break
-        assert i == num_samples - 1  # Assert that the sample count metric was true
+        # with data_file.open() as f:
+        #     for i, line in enumerate(f):
+        #         print('\ri = %d' % i, end='\r')
+        #         # count_sample += 1
+        #         line = line.strip()
+        #         example = json.loads(line)
+        #         features = convert_example_to_features(example, tokenizer, seq_len)
+        #         input_ids[i] = features.input_ids
+        #         segment_ids[i] = features.segment_ids
+        #         input_masks[i] = features.input_mask
+        #         lm_label_ids[i] = features.lm_label_ids
+        #         is_nexts[i] = features.is_next
+        #         # if count_sample == num_samples: break
+        # assert i == num_samples - 1  # Assert that the sample count metric was true
 
         # np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
         # np.save(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}), lm_label_ids)
@@ -129,13 +129,20 @@ class PregeneratedDataset(Dataset):
         # np.save(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}), segment_ids)
         # np.save(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}), is_nexts)
 
-        # input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 1/7')
+        input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 2/7')
+        lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 3/7')
+        num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 4/7')
+        seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 5/7')
+        input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 6/7')
+        segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        logger.info('Loading... 7/7')
+        is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         
         logger.info("Loading complete!")
         self.num_samples = num_samples
