@@ -47,7 +47,7 @@ python run_pretraining.py \
     --num_save_steps 10000 \
     --local_rank -1 \
     --gradient_accumulation_steps 1 \
-    --train_batch_size 1 \
+    --train_batch_size 256 \
     --loss_scale 0 \
     --warmup_proportion 0.1 \
     --adam_epsilon 1e-8 \
