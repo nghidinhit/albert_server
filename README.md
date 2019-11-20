@@ -1,3 +1,6 @@
+# Requirement
+pip install -r requirements.txt
+
 # Usage
 In the root directory, run the following command:
 
