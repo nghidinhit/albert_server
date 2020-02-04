@@ -24,6 +24,7 @@ from common.tools import seed_everything
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'tcp://127.0.0.1'
     os.environ['MASTER_PORT'] = '12355'
@@ -72,69 +73,84 @@ def convert_example_to_features(example, tokenizer, max_seq_length):
 
 
 class PregeneratedDataset(Dataset):
-    def __init__(self, training_path, file_id, tokenizer, data_name, reduce_memory=False):
+    def __init__(self, training_path, file_id, tokenizer, data_name, reduce_memory=False, num_samples=None):
         self.tokenizer = tokenizer
         self.file_id = file_id
         data_file = training_path / f"{data_name}_file_{self.file_id}.json"
         metrics_file = training_path / f"{data_name}_file_{self.file_id}_metrics.json"
         assert data_file.is_file() and metrics_file.is_file()
         metrics = json.loads(metrics_file.read_text())
-        num_samples = metrics['num_training_examples']
+        if num_samples is not None:
+            self.num_samples = num_samples
+        else:
+            self.num_samples = metrics['num_training_examples']
         seq_len = metrics['max_seq_len']
         self.temp_dir = None
         self.working_dir = None
+
+        # input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # if num_samples is None:
+        #     self.num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        #     print('num_samples load: ', self.num_samples)
+        # seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+
         if reduce_memory:
             self.temp_dir = TemporaryDirectory()
             self.working_dir = Path(self.temp_dir.name)
             input_ids = np.memmap(filename=self.working_dir / 'input_ids.memmap',
-                                  mode='w+', dtype=np.int32, shape=(num_samples, seq_len))
+                                  mode='w+', dtype=np.int32, shape=(self.num_samples, seq_len))
             input_masks = np.memmap(filename=self.working_dir / 'input_masks.memmap',
-                                    shape=(num_samples, seq_len), mode='w+', dtype=np.bool)
+                                    shape=(self.num_samples, seq_len), mode='w+', dtype=np.bool)
             segment_ids = np.memmap(filename=self.working_dir / 'segment_ids.memmap',
-                                    shape=(num_samples, seq_len), mode='w+', dtype=np.bool)
+                                    shape=(self.num_samples, seq_len), mode='w+', dtype=np.bool)
             lm_label_ids = np.memmap(filename=self.working_dir / 'lm_label_ids.memmap',
-                                     shape=(num_samples, seq_len), mode='w+', dtype=np.int32)
+                                     shape=(self.num_samples, seq_len), mode='w+', dtype=np.int32)
             lm_label_ids[:] = -1
             is_nexts = np.memmap(filename=self.working_dir / 'is_nexts.memmap',
-                                 shape=(num_samples,), mode='w+', dtype=np.bool)
+                                 shape=(self.num_samples,), mode='w+', dtype=np.bool)
         else:
-            input_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.int32)
-            input_masks = np.zeros(shape=(num_samples, seq_len), dtype=np.bool)
-            segment_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.bool)
-            lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
-            is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
+            input_ids = np.zeros(shape=(self.num_samples, seq_len), dtype=np.int32)
+            input_masks = np.zeros(shape=(self.num_samples, seq_len), dtype=np.bool)
+            segment_ids = np.zeros(shape=(self.num_samples, seq_len), dtype=np.bool)
+            lm_label_ids = np.full(shape=(self.num_samples, seq_len), dtype=np.int32, fill_value=-1)
+            is_nexts = np.zeros(shape=(self.num_samples,), dtype=np.bool)
         logger.info(f"Loading training examples for {str(data_file)}")
-        # count_sample = 0
-        # num_samples = 1000
-        # with data_file.open() as f:
-        #     for i, line in enumerate(f):
-        #         print('\ri = %d' % i, end='\r')
-        #         # count_sample += 1
-        #         line = line.strip()
-        #         example = json.loads(line)
-        #         features = convert_example_to_features(example, tokenizer, seq_len)
-        #         input_ids[i] = features.input_ids
-        #         segment_ids[i] = features.segment_ids
-        #         input_masks[i] = features.input_mask
-        #         lm_label_ids[i] = features.lm_label_ids
-        #         is_nexts[i] = features.is_next
-        #         # if count_sample == num_samples: break
+
+        count_sample = 0
+        with data_file.open() as f:
+            for i, line in enumerate(f):
+                print('\ri = %d' % i, end='\r')
+                count_sample += 1
+                line = line.strip()
+                example = json.loads(line)
+                features = convert_example_to_features(example, tokenizer, seq_len)
+                input_ids[i] = features.input_ids
+                segment_ids[i] = features.segment_ids
+                input_masks[i] = features.input_mask
+                lm_label_ids[i] = features.lm_label_ids
+                is_nexts[i] = features.is_next
+                if count_sample == self.num_samples: break
+
         # assert i == num_samples - 1  # Assert that the sample count metric was true
 
-        # np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
-        # np.save(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}), lm_label_ids)
-        # np.save(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}), num_samples)
-        # np.save(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}), seq_len)
-        # np.save(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}), input_masks)
-        # np.save(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}), segment_ids)
-        # np.save(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}), is_nexts)
+        np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
+        np.save(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}), lm_label_ids)
+        np.save(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}), num_samples)
+        np.save(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}), seq_len)
+        np.save(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}), input_masks)
+        np.save(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}), segment_ids)
+        np.save(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}), is_nexts)
 
         logger.info('Loading... 1/7')
         input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         logger.info('Loading... 2/7')
         lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         logger.info('Loading... 3/7')
-        num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        self.num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         logger.info('Loading... 4/7')
         seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         logger.info('Loading... 5/7')
@@ -143,9 +159,9 @@ class PregeneratedDataset(Dataset):
         segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
         logger.info('Loading... 7/7')
         is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        
+
         logger.info("Loading complete!")
-        self.num_samples = num_samples
+        # self.num_samples = num_samples
         self.seq_len = seq_len
         self.input_ids = input_ids[:self.num_samples]
         self.input_masks = input_masks[:self.num_samples]
@@ -170,7 +186,7 @@ def get_n_params(model):
         nn=1
         for s in list(p.size()):
             nn = nn*s
-        print('name: ', n, '- num: ', nn)
+        # print('name: ', n, '- num: ', nn)
         pp += nn
     return pp
 
@@ -178,46 +194,35 @@ def get_n_params(model):
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data_name', default='albert', type=str)
-    parser.add_argument("--file_num", type=int, default=10,
-                        help="Number of dynamic masking to pregenerate (with different masks)")
-    parser.add_argument("--reduce_memory", action="store_true",
-                        help="Store training data as on-disc memmaps to massively reduce memory usage")
-    parser.add_argument("--epochs", type=int, default=4,
-                        help="Number of epochs to train for")
-    parser.add_argument('--share_type',default='all',type=str,choices=['all','attention','ffn','None'])
+    parser.add_argument("--file_num", type=int, default=10, help="Number of dynamic masking to pregenerate (with different masks)")
+    parser.add_argument("--reduce_memory", action="store_true", help="Store training data as on-disc memmaps to massively reduce memory usage")
+    parser.add_argument("--epochs", type=int, default=4, help="Number of epochs to train for")
+    parser.add_argument('--share_type', default='all',type=str,choices=['all','attention','ffn','None'])
     parser.add_argument('--num_eval_steps', default=100)
     parser.add_argument('--num_save_steps', default=200)
-    parser.add_argument("--local_rank", type=int, default=-1,
-                        help="local_rank for distributed training on gpus")
-    parser.add_argument("--no_cuda", action='store_true',
-                        help="Whether not to use CUDA when available")
-    parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
-                        help="Number of updates steps to accumulate before performing a backward/update pass.")
-    parser.add_argument("--train_batch_size", default=4, type=int,
-                        help="Total batch size for training.")
+    parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
+    parser.add_argument("--no_cuda", action='store_true', help="Whether not to use CUDA when available")
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.")
+    parser.add_argument("--train_batch_size", default=4, type=int, help="Total batch size for training.")
     parser.add_argument('--loss_scale', type=float, default=0,
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
-    parser.add_argument("--warmup_proportion", default=0.1, type=float,
-                        help="Linear warmup over warmup_steps.")
-    parser.add_argument("--adam_epsilon", default=1e-8, type=float,
-                        help="Epsilon for Adam optimizer.")
+    parser.add_argument("--warmup_proportion", default=0.1, type=float, help="Linear warmup over warmup_steps.")
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument('--max_grad_norm', default=1.0, type=float)
-    parser.add_argument("--learning_rate", default=0.00176, type=float,
-                        help="The initial learning rate for Adam.")
-    parser.add_argument('--seed', type=int, default=42,
-                        help="random seed for initialization")
+    parser.add_argument("--learning_rate", default=0.00176, type=float, help="The initial learning rate for Adam.")
+    parser.add_argument('--seed', type=int, default=42, help="random seed for initialization")
     parser.add_argument('--fp16_opt_level', type=str, default='O2',
                         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
                              "See details at https://nvidia.github.io/apex/amp.html")
-    parser.add_argument('--fp16', action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+    parser.add_argument('--fp16', action='store_true', help="Whether to use 16-bit float precision instead of 32-bit")
     parser.add_argument('--num_samples', type=int, default=15000000, help='num sample for training')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints/lm-checkpoint')
+    parser.add_argument('--device_ids', nargs='+', help='gpu id for training')
     args = parser.parse_args()
 
-    pregenerated_data = config['data_dir'] / "corpus"
+    pregenerated_data = config['data_dir']
     assert pregenerated_data.is_dir(), \
         "--pregenerated_data should point to the folder of files made by prepare_lm_data_mask.py!"
 
@@ -230,7 +235,9 @@ def main():
         if data_file.is_file() and metrics_file.is_file():
             metrics = json.loads(metrics_file.read_text())
             samples_per_epoch += metrics['num_training_examples']
-            # samples_per_epoch += int(args.num_samples)
+            # num_samples = int(args.num_samples)
+            # num_samples = np.load(str(config['pre_load_data']) + '/num_samples_albert_file_' + str({i}) + '.npy')
+            # samples_per_epoch += num_samples
         else:
             if i == 0:
                 exit("No training data was found!")
@@ -238,16 +245,27 @@ def main():
             print("This script will loop over the available data, but training diversity may be negatively impacted.")
             break
     logger.info(f"samples_per_epoch: {samples_per_epoch}")
+    device_ids = args.device_ids
+    for i in range(len(device_ids)):
+        device_ids[i] = int(device_ids[i])
+    logger.info('device ids: ' + str(device_ids))
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device(f"cuda:0" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        device = torch.device(f"cuda:" + str(device_ids[0]) if torch.cuda.is_available() and not args.no_cuda else "cpu")
         args.n_gpu = torch.cuda.device_count()
     else:
         torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda:0")
+        device = torch.device("cuda", args.local_rank)
         args.n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        # setup(rank=0, world_size=6) 
-        torch.distributed.init_process_group(backend='nccl', init_method='tcp://127.0.0.1:10000', world_size=6, rank=0)
+        # setup(rank=0, world_size=6)
+        logger.info('Init process group')
+        os.environ['RANK'] = '0'
+        os.environ['WORLD_SIZE'] = '2'
+        os.environ['MASTER_ADDR'] = '172.17.0.3'
+        os.environ['MASTER_PORT'] = '10023'
+        torch.distributed.init_process_group(backend='nccl')
+        # torch.distributed.init_process_group(backend='nccl', init_method='tcp://172.17.0.3:10320', world_size=2, rank=0)
+        logger.info('Finish init process group')
     logger.info(
         f"device: {device} , distributed training: {bool(args.local_rank != -1)}, 16-bits training: {args.fp16}, "
         f"share_type: {args.share_type}")
@@ -257,8 +275,9 @@ def main():
             f"Invalid gradient_accumulation_steps parameter: {args.gradient_accumulation_steps}, should be >= 1")
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
     seed_everything(args.seed)
+    print('checkpoint_dir: ', config['checkpoint_dir'])
     try:
-        tokenizer = BertTokenizer.from_pretrained(args.checkpoint_dir)
+        tokenizer = BertTokenizer.from_pretrained(config['checkpoint_dir'])
         if tokenizer is not None:
             logger.info('Init tokenizer from pretrained model')
         else:
@@ -277,7 +296,7 @@ def main():
 
     bert_config = BertConfig.from_pretrained(str(config['albert_config_path']), share_type=args.share_type)
     try:
-        model = BertForPreTraining.from_pretrained(args.checkpoint_dir)
+        model = BertForPreTraining.from_pretrained(config['checkpoint_dir'])
         logger.info('Load model from pretrained model')
     except:
         model = BertForPreTraining(config=bert_config)
@@ -288,8 +307,8 @@ def main():
     param_optimizer = list(model.named_parameters())
     # for n, p in param_optimizer:
     #     print('name layers: ', n)
-    # pp = get_n_params(model)
-    # print('total: ', pp)
+    pp = get_n_params(model)
+    print('total: ', pp)
 
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -307,11 +326,10 @@ def main():
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
     if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=[0, 1, 2, 3, 4, 5, 6, 7])
+        model = torch.nn.DataParallel(model, device_ids=device_ids)
 
     if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
-                                                          output_device=args.local_rank)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
     global_step = 0
     mask_metric = LMAccuracy()
     sop_metric = LMAccuracy()
@@ -414,7 +432,7 @@ def main():
                     best_loss = loss.item()
                     # if global_step > 1000:
                     # Save model checkpoint
-                    output_dir = config['checkpoint_dir'] / f'lm-checkpoint'
+                    output_dir = config['checkpoint_dir']
                     if not output_dir.exists():
                         output_dir.mkdir()
                     # save model
@@ -422,7 +440,9 @@ def main():
                                                             'module') else model  # Take care of distributed/parallel training
                     model_to_save.save_pretrained(str(output_dir))
                     torch.save(args, str(output_dir / 'training_args.bin'))
-                    logger.info("Saving model checkpoint to '%s' at step %d - loss: %f" % (output_dir, step, loss))
+                    torch.save({'step:': step, 'epoch': epoch, 'idx_file': idx,
+                                'lr_scheduler': lr_scheduler, 'optimizer': optimizer}, str(output_dir / 'params.pt'))
+                    logger.info("Saving checkpoint to '%s' at step %d - loss: %f" % (output_dir, step, loss))
 
                     # save config
                     output_config_file = output_dir / CONFIG_NAME
