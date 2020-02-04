@@ -88,77 +88,77 @@ class PregeneratedDataset(Dataset):
         self.temp_dir = None
         self.working_dir = None
 
-        # input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # if num_samples is None:
-        #     self.num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        #     print('num_samples load: ', self.num_samples)
-        # seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        # is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-
-        if reduce_memory:
-            self.temp_dir = TemporaryDirectory()
-            self.working_dir = Path(self.temp_dir.name)
-            input_ids = np.memmap(filename=self.working_dir / 'input_ids.memmap',
-                                  mode='w+', dtype=np.int32, shape=(self.num_samples, seq_len))
-            input_masks = np.memmap(filename=self.working_dir / 'input_masks.memmap',
-                                    shape=(self.num_samples, seq_len), mode='w+', dtype=np.bool)
-            segment_ids = np.memmap(filename=self.working_dir / 'segment_ids.memmap',
-                                    shape=(self.num_samples, seq_len), mode='w+', dtype=np.bool)
-            lm_label_ids = np.memmap(filename=self.working_dir / 'lm_label_ids.memmap',
-                                     shape=(self.num_samples, seq_len), mode='w+', dtype=np.int32)
-            lm_label_ids[:] = -1
-            is_nexts = np.memmap(filename=self.working_dir / 'is_nexts.memmap',
-                                 shape=(self.num_samples,), mode='w+', dtype=np.bool)
-        else:
-            input_ids = np.zeros(shape=(self.num_samples, seq_len), dtype=np.int32)
-            input_masks = np.zeros(shape=(self.num_samples, seq_len), dtype=np.bool)
-            segment_ids = np.zeros(shape=(self.num_samples, seq_len), dtype=np.bool)
-            lm_label_ids = np.full(shape=(self.num_samples, seq_len), dtype=np.int32, fill_value=-1)
-            is_nexts = np.zeros(shape=(self.num_samples,), dtype=np.bool)
-        logger.info(f"Loading training examples for {str(data_file)}")
-
-        count_sample = 0
-        with data_file.open() as f:
-            for i, line in enumerate(f):
-                print('\ri = %d' % i, end='\r')
-                count_sample += 1
-                line = line.strip()
-                example = json.loads(line)
-                features = convert_example_to_features(example, tokenizer, seq_len)
-                input_ids[i] = features.input_ids
-                segment_ids[i] = features.segment_ids
-                input_masks[i] = features.input_mask
-                lm_label_ids[i] = features.lm_label_ids
-                is_nexts[i] = features.is_next
-                if count_sample == self.num_samples: break
-
-        # assert i == num_samples - 1  # Assert that the sample count metric was true
-
-        np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
-        np.save(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}), lm_label_ids)
-        np.save(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}), num_samples)
-        np.save(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}), seq_len)
-        np.save(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}), input_masks)
-        np.save(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}), segment_ids)
-        np.save(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}), is_nexts)
-
-        logger.info('Loading... 1/7')
         input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        logger.info('Loading... 2/7')
         lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        logger.info('Loading... 3/7')
-        self.num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        logger.info('Loading... 4/7')
+        if num_samples is None:
+            self.num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+            print('num_samples load: ', self.num_samples)
         seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        logger.info('Loading... 5/7')
         input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        logger.info('Loading... 6/7')
         segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
-        logger.info('Loading... 7/7')
         is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+
+        # if reduce_memory:
+        #     self.temp_dir = TemporaryDirectory()
+        #     self.working_dir = Path(self.temp_dir.name)
+        #     input_ids = np.memmap(filename=self.working_dir / 'input_ids.memmap',
+        #                           mode='w+', dtype=np.int32, shape=(self.num_samples, seq_len))
+        #     input_masks = np.memmap(filename=self.working_dir / 'input_masks.memmap',
+        #                             shape=(self.num_samples, seq_len), mode='w+', dtype=np.bool)
+        #     segment_ids = np.memmap(filename=self.working_dir / 'segment_ids.memmap',
+        #                             shape=(self.num_samples, seq_len), mode='w+', dtype=np.bool)
+        #     lm_label_ids = np.memmap(filename=self.working_dir / 'lm_label_ids.memmap',
+        #                              shape=(self.num_samples, seq_len), mode='w+', dtype=np.int32)
+        #     lm_label_ids[:] = -1
+        #     is_nexts = np.memmap(filename=self.working_dir / 'is_nexts.memmap',
+        #                          shape=(self.num_samples,), mode='w+', dtype=np.bool)
+        # else:
+        #     input_ids = np.zeros(shape=(self.num_samples, seq_len), dtype=np.int32)
+        #     input_masks = np.zeros(shape=(self.num_samples, seq_len), dtype=np.bool)
+        #     segment_ids = np.zeros(shape=(self.num_samples, seq_len), dtype=np.bool)
+        #     lm_label_ids = np.full(shape=(self.num_samples, seq_len), dtype=np.int32, fill_value=-1)
+        #     is_nexts = np.zeros(shape=(self.num_samples,), dtype=np.bool)
+        # logger.info(f"Loading training examples for {str(data_file)}")
+        #
+        # count_sample = 0
+        # with data_file.open() as f:
+        #     for i, line in enumerate(f):
+        #         print('\ri = %d' % i, end='\r')
+        #         count_sample += 1
+        #         line = line.strip()
+        #         example = json.loads(line)
+        #         features = convert_example_to_features(example, tokenizer, seq_len)
+        #         input_ids[i] = features.input_ids
+        #         segment_ids[i] = features.segment_ids
+        #         input_masks[i] = features.input_mask
+        #         lm_label_ids[i] = features.lm_label_ids
+        #         is_nexts[i] = features.is_next
+        #         if count_sample == self.num_samples: break
+        #
+        # # assert i == num_samples - 1  # Assert that the sample count metric was true
+        #
+        # np.save(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}), input_ids)
+        # np.save(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}), lm_label_ids)
+        # np.save(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}), num_samples)
+        # np.save(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}), seq_len)
+        # np.save(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}), input_masks)
+        # np.save(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}), segment_ids)
+        # np.save(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}), is_nexts)
+        #
+        # logger.info('Loading... 1/7')
+        # input_ids = np.load(str(config['pre_load_data']) + '/input_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # logger.info('Loading... 2/7')
+        # lm_label_ids = np.load(str(config['pre_load_data']) + '/lm_label_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # logger.info('Loading... 3/7')
+        # self.num_samples = np.load(str(config['pre_load_data']) + '/num_samples_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # logger.info('Loading... 4/7')
+        # seq_len = np.load(str(config['pre_load_data']) + '/seq_len_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # logger.info('Loading... 5/7')
+        # input_masks = np.load(str(config['pre_load_data']) + '/input_masks_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # logger.info('Loading... 6/7')
+        # segment_ids = np.load(str(config['pre_load_data']) + '/segment_ids_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
+        # logger.info('Loading... 7/7')
+        # is_nexts = np.load(str(config['pre_load_data']) + '/is_nexts_' + str(data_name) + '_file_' + str({self.file_id}) + '.npy')
 
         logger.info("Loading complete!")
         # self.num_samples = num_samples
@@ -234,10 +234,10 @@ def main():
         # print(metrics_file)
         if data_file.is_file() and metrics_file.is_file():
             metrics = json.loads(metrics_file.read_text())
-            samples_per_epoch += metrics['num_training_examples']
-            # num_samples = int(args.num_samples)
+            # samples_per_epoch += metrics['num_training_examples']
+            num_samples = int(args.num_samples)
             # num_samples = np.load(str(config['pre_load_data']) + '/num_samples_albert_file_' + str({i}) + '.npy')
-            # samples_per_epoch += num_samples
+            samples_per_epoch += num_samples
         else:
             if i == 0:
                 exit("No training data was found!")
@@ -308,7 +308,7 @@ def main():
     # for n, p in param_optimizer:
     #     print('name layers: ', n)
     pp = get_n_params(model)
-    print('total: ', pp)
+    print('total params: ', pp)
 
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
@@ -353,7 +353,7 @@ def main():
     for epoch in range(args.epochs):
         for idx in range(args.file_num):
             epoch_dataset = PregeneratedDataset(file_id=idx, training_path=pregenerated_data, tokenizer=tokenizer,
-                                                reduce_memory=args.reduce_memory, data_name=args.data_name)
+                                                reduce_memory=args.reduce_memory, data_name=args.data_name, num_samples=num_samples)
             if args.local_rank == -1:
                 train_sampler = RandomSampler(epoch_dataset)
             else:
@@ -365,6 +365,9 @@ def main():
                 time_1 = time.time()
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, lm_label_ids, is_next = batch
+                print('input_ids: ', torch.max(input_ids))
+                print('lm_label_ids: ', torch.max(lm_label_ids))
+                print('-----------------------------------------------')
                 outputs = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask)
                 prediction_scores = outputs[0]
                 seq_relationship_score = outputs[1]
