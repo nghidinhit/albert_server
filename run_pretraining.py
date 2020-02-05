@@ -232,18 +232,18 @@ def main():
         metrics_file = pregenerated_data / f"{args.data_name}_file_{i}_metrics.json"
         # print(data_file)
         # print(metrics_file)
-        if data_file.is_file() and metrics_file.is_file():
-            metrics = json.loads(metrics_file.read_text())
-            # samples_per_epoch += metrics['num_training_examples']
-            num_samples = int(args.num_samples)
-            # num_samples = np.load(str(config['pre_load_data']) + '/num_samples_albert_file_' + str({i}) + '.npy')
-            samples_per_epoch += num_samples
-        else:
-            if i == 0:
-                exit("No training data was found!")
-            print(f"Warning! There are fewer epochs of pregenerated data ({i}) than training epochs ({args.epochs}).")
-            print("This script will loop over the available data, but training diversity may be negatively impacted.")
-            break
+        # if data_file.is_file() and metrics_file.is_file():
+        #     metrics = json.loads(metrics_file.read_text())
+        # samples_per_epoch += metrics['num_training_examples']
+        num_samples = int(args.num_samples)
+        # num_samples = np.load(str(config['pre_load_data']) + '/num_samples_albert_file_' + str({i}) + '.npy')
+        samples_per_epoch += num_samples
+        # else:
+        #     if i == 0:
+        #         exit("No training data was found!")
+        #     print(f"Warning! There are fewer epochs of pregenerated data ({i}) than training epochs ({args.epochs}).")
+        #     print("This script will loop over the available data, but training diversity may be negatively impacted.")
+        #     break
     logger.info(f"samples_per_epoch: {samples_per_epoch}")
     device_ids = args.device_ids
     for i in range(len(device_ids)):
@@ -365,9 +365,9 @@ def main():
                 time_1 = time.time()
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, lm_label_ids, is_next = batch
-                print('input_ids: ', torch.max(input_ids))
-                print('lm_label_ids: ', torch.max(lm_label_ids))
-                print('-----------------------------------------------')
+                # print('input_ids: ', torch.max(input_ids))
+                # print('lm_label_ids: ', torch.max(lm_label_ids))
+                # print('-----------------------------------------------')
                 outputs = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask)
                 prediction_scores = outputs[0]
                 seq_relationship_score = outputs[1]
