@@ -47,11 +47,12 @@ python run_pretraining.py \
     --num_save_steps 10000 \
     --local_rank -1 \
     --gradient_accumulation_steps 1 \
-    --train_batch_size 256 \
+    --train_batch_size 128 \
     --loss_scale 0 \
     --warmup_proportion 0.1 \
     --adam_epsilon 1e-8 \
     --max_grad_norm 10.0 \
     --learning_rate 0.00176 \
     --seed 42 \
-    --device_ids 0
+    --device_ids 0 1 2 3 4 5 6 7 \
+    --num_samples 20000000
