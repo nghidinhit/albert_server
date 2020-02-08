@@ -3,7 +3,7 @@ import argparse
 import torch
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, TensorDataset)
 from model.file_utils import WEIGHTS_NAME, CONFIG_NAME
-from model.modeling_albert import BertConfig
+from model.modeling_albert import BertConfig, BertForTokenClassification
 from model.optimization import AdamW, WarmupLinearSchedule
 from common.tools import seed_everything
 from common.tools import logger, init_logger
@@ -278,6 +278,7 @@ def main():
         valid_dataloader = DataLoader(valid_dataset, sampler=valid_sampler, batch_size=args.eval_batch_size)
 
         model = BertForSequenceClassification.from_pretrained(config['bert_dir'], config=bert_config)
+        # model = BertForTokenClassification.from_pretrained(config['bert_dir'], config=bert_config)
         if args.local_rank == 0:
             torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
         model.to(args.device)
