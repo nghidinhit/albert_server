@@ -185,7 +185,7 @@ def random_word(tokens, tokenizer):
     return tokens, output_label
 
 
-def prepare_bert_input(guid, tokenizer, seq_len, sentence_a, sentence_b=None, is_next_label=None):
+def prepare_albert_input(guid, tokenizer, seq_len, sentence_a, sentence_b=None, is_next_label=None):
     # tokenize
     tokens_a = tokenizer.tokenize(sentence_a)
     tokens_b = tokenizer.tokenize(sentence_b)
@@ -202,13 +202,13 @@ def prepare_bert_input(guid, tokenizer, seq_len, sentence_a, sentence_b=None, is
     return cur_tensors
 
 
-def load_bert(bert_model_path):
+def load_albert(albert_model_path):
     # tokenizer = BertTokenizer(vocab_file='pretrained/bert_base_news_128/vocab.txt')
-    tokenizer = BertTokenizer.from_pretrained(bert_model_path, do_lower_case=True)
+    tokenizer = BertTokenizer.from_pretrained(albert_model_path, do_lower_case=True)
     # Prepare model
     # config = BertConfig.from_json_file(args.bert_config_file)
     # model = BertForPreTraining.from_pretrained(bert_model_path)
-    model = BertModel.from_pretrained(bert_model_path)
+    model = BertModel.from_pretrained(albert_model_path)
     # model = BertForPreTraining(config)
     return model, tokenizer
 
@@ -216,7 +216,7 @@ def load_bert(bert_model_path):
 if __name__ == '__main__':
     model_path = 'checkpoints/lm-checkpoint/albert_large_shareall/20191126-step: 851693 - loss: 1.519739'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    bert_model, bert_tokenizer = load_bert(model_path)
+    bert_model, bert_tokenizer = load_albert(model_path)
     bert_model.to(device)
 
     guid = '1'
