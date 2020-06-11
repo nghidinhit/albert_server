@@ -35,7 +35,7 @@ class Ner(BertForTokenClassification):
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None, valid_ids=None, attention_mask_label=None):
         sequence_output = self.bert(input_ids, token_type_ids, attention_mask,head_mask=None)[0]
         batch_size,max_len,feat_dim = sequence_output.shape
-        valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32,device='cuda:4')
+        valid_output = torch.zeros(batch_size, max_len, feat_dim, dtype=torch.float32, device='cuda')
         for i in range(batch_size):
             jj = -1
             for j in range(max_len):
@@ -167,14 +167,14 @@ class NerProcessor(DataProcessor):
             text_a = ' '.join(sentence)
             text_b = None
             label = label
-            examples.append(InputExample(guid=guid,text_a=text_a,text_b=text_b,label=label))
+            examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
 
-    label_map = {label : i for i, label in enumerate(label_list,1)}
+    label_map = {label : i for i, label in enumerate(label_list, 1)}
 
     features = []
     for (ex_index,example) in enumerate(examples):
@@ -259,7 +259,38 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
     return features
 
 
-def main():
+def set_seed(params):
+    random.seed(params.seed)
+    np.random.seed(params.seed)
+    torch.manual_seed(params.seed)
+
+
+def get_optimizer(model, args, num_train_optimization_steps):
+    param_optimizer = list(model.named_parameters())
+    no_decay = ['bias','LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
+        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        ]
+    warmup_steps = int(args.warmup_proportion * num_train_optimization_steps)
+    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optimization_steps)
+
+    return optimizer, scheduler
+
+
+def do_fp16(args, model, optimizer):
+    if args.fp16:
+        try:
+            from apex import amp
+        except ImportError:
+            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
+        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+
+    return model, optimizer
+
+
+def parse_args():
     parser = argparse.ArgumentParser()
 
     ## Required parameters
@@ -268,10 +299,10 @@ def main():
                         type=str,
                         required=True,
                         help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
-    parser.add_argument("--bert_onmodel", default=None, type=str, required=True,
+    parser.add_argument("--bert_model", default=None, type=str, required=True,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                        "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
-                        "bert-base-multilingual-cased, bert-base-chinese.")
+                             "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
+                             "bert-base-multilingual-cased, bert-base-chinese.")
     parser.add_argument("--task_name",
                         default=None,
                         type=str,
@@ -364,6 +395,10 @@ def main():
     parser.add_argument('--device_ids', nargs='+', help='gpu id for training')
     args = parser.parse_args()
 
+    return args
+
+
+def set_host(args):
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
         import ptvsd
@@ -371,29 +406,35 @@ def main():
         ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
         ptvsd.wait_for_attach()
 
-    processors = {"ner":NerProcessor}
 
+def get_device(args):
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda:4" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
+        device = torch.device("cuda:0" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        n_gpus = torch.cuda.device_count()
     else:
         torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda:4", args.local_rank)
-        n_gpu = 1
+        device = torch.device("cuda:2", args.local_rank)
+        n_gpus = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl')
+
+    return device, n_gpus
+
+
+def main():
+    args = parse_args()
+    set_host(args)
+    set_seed(args)
+    device, n_gpus = get_device(args)
+
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
-        device, n_gpu, bool(args.local_rank != -1), args.fp16))
+        device, n_gpus, bool(args.local_rank != -1), args.fp16))
 
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
                             args.gradient_accumulation_steps))
 
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
 
     if not args.do_train and not args.do_eval:
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
@@ -404,7 +445,7 @@ def main():
         os.makedirs(args.output_dir)
 
     task_name = args.task_name.lower()
-
+    processors = {"ner": NerProcessor}
     if task_name not in processors:
         raise ValueError("Task not found: %s" % (task_name))
 
@@ -428,9 +469,7 @@ def main():
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
     # Prepare model
-    logger.info('Config from pretrained')
     config = BertConfig.from_pretrained(args.bert_model, num_labels=num_labels, finetuning_task=args.task_name)
-    logger.info('NER from pretrained')
     model = Ner.from_pretrained(args.bert_model, from_tf = False, config = config)
 
     if args.local_rank == 0:
@@ -438,27 +477,14 @@ def main():
 
     model.to(device)
 
-    param_optimizer = list(model.named_parameters())
-    no_decay = ['bias','LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
-        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-    warmup_steps = int(args.warmup_proportion * num_train_optimization_steps)
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optimization_steps)
-    if args.fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+    optimizer, scheduler = get_optimizer(model, args, num_train_optimization_steps)
+    model, optimizer = do_fp16(args, model, optimizer)
 
     # multi-gpu training (should be after apex fp16 initialization)
     device_ids = args.device_ids
     for i in range(len(device_ids)):
         device_ids[i] = int(device_ids[i])
-    if n_gpu > 1:
+    if n_gpus > 1:
         model = torch.nn.DataParallel(model, device_ids=device_ids)
 
     if args.local_rank != -1:
@@ -466,11 +492,10 @@ def main():
                                                           output_device=args.local_rank,
                                                           find_unused_parameters=True)
 
-
     global_step = 0
     nb_tr_steps = 0
     tr_loss = 0
-    label_map = {i : label for i, label in enumerate(label_list,1)}
+    label_map = {i : label for i, label in enumerate(label_list, 1)}
     if args.do_train:
         train_features = convert_examples_to_features(
             train_examples, label_list, args.max_seq_length, tokenizer)
@@ -499,7 +524,7 @@ def main():
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids, valid_ids, l_mask = batch
                 loss = model(input_ids, segment_ids, input_mask, label_ids, valid_ids, l_mask)
-                if n_gpu > 1:
+                if n_gpus > 1:
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
@@ -525,7 +550,7 @@ def main():
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         model_to_save.save_pretrained(args.output_dir)
         tokenizer.save_pretrained(args.output_dir)
-        label_map = {i : label for i, label in enumerate(label_list,1)}
+        label_map = {i : label for i, label in enumerate(label_list, 1)}
         model_config = {"bert_model" :args.bert_model, "do_lower": args.do_lower_case,"max_seq_length": args.max_seq_length, "num_labels": len(label_list)+1, "label_map":label_map}
         json.dump(model_config,open(os.path.join(args.output_dir,"model_config.json"),"w"))
         # Load a trained model and config that you have fine-tuned
@@ -562,8 +587,9 @@ def main():
         nb_eval_steps, nb_eval_examples = 0, 0
         y_true = []
         y_pred = []
-        label_map = {i : label for i, label in enumerate(label_list,1)}
-        for input_ids, input_mask, segment_ids, label_ids,valid_ids,l_mask in tqdm(eval_dataloader, desc="Evaluating"):
+        label_map = {i : label for i, label in enumerate(label_list, 1)}
+        print(label_map)
+        for input_ids, input_mask, segment_ids, label_ids, valid_ids, l_mask in tqdm(eval_dataloader, desc="Evaluating"):
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
             segment_ids = segment_ids.to(device)
@@ -572,17 +598,20 @@ def main():
             l_mask = l_mask.to(device)
 
             with torch.no_grad():
-                logits = model(input_ids, segment_ids, input_mask,valid_ids=valid_ids,attention_mask_label=l_mask)
+                logits = model(input_ids, segment_ids, input_mask, valid_ids=valid_ids, attention_mask_label=l_mask)
 
-            logits = torch.argmax(F.log_softmax(logits,dim=2),dim=2)
+            logits = torch.argmax(F.log_softmax(logits, dim=2), dim=2)
             logits = logits.detach().cpu().numpy()
+            # for logit, label_id in zip(logits, label_ids):
+            #     print(logit)
+            #     print(label_id)
             label_ids = label_ids.to('cpu').numpy()
             input_mask = input_mask.to('cpu').numpy()
 
             for i, label in enumerate(label_ids):
                 temp_1 = []
                 temp_2 = []
-                for j,m in enumerate(label):
+                for j, m in enumerate(label):
                     if j == 0:
                         continue
                     elif label_ids[i][j] == len(label_map):
@@ -591,9 +620,10 @@ def main():
                         break
                     else:
                         temp_1.append(label_map[label_ids[i][j]])
+                        # print(logits[i][j])
                         temp_2.append(label_map[logits[i][j]])
 
-        report = classification_report(y_true, y_pred,digits=4)
+        report = classification_report(y_true, y_pred, digits=4)
         logger.info("\n%s", report)
         output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
         with open(output_eval_file, "w") as writer:
